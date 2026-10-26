@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gắn Bookmark PDF</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085;
+    --border: #d8dce3; --accent: #1f6feb; --accent-weak: #e8f0fe;
+    --ok: #1a7f37; --warn: #b35900; --err: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --card: #171b23; --text: #e6e9ef; --muted: #98a2b3;
+      --border: #2b3240; --accent: #4c8dff; --accent-weak: #1a2740;
+      --ok: #4ac26b; --warn: #f0a050; --err: #ff6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 16px; margin: 0 0 12px; }
+  .drop {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 20px;
+    text-align: center; cursor: pointer; transition: .15s;
+    min-height: 110px; display: flex; flex-direction: column;
+    justify-content: center; gap: 4px;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-weak); }
+  .drop strong { word-break: break-all; }
+  .drop .hint { color: var(--muted); font-size: 13px; }
+  input[type=file] { display: none; }
+  label.row { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+  input[type=number], input[type=text] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font: inherit;
+  }
+  input[type=number] { width: 90px; }
+  input[type=text] { flex: 1; min-width: 200px; }
+  textarea {
+    width: 100%; min-height: 220px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; resize: vertical;
+  }
+  button, .btn {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-block;
+  }
+  button.secondary, .btn.secondary {
+    background: transparent; color: var(--accent); border: 1px solid var(--accent);
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .msg { margin-top: 12px; font-size: 14px; white-space: pre-line; }
+  .msg.ok { color: var(--ok); } .msg.warn { color: var(--warn); } .msg.err { color: var(--err); }
+  .tree { max-height: 420px; overflow: auto; font-size: 14px; }
+  .tree .it { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .tree .t { flex: 1; min-width: 0; }
+  .tree .p { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tree .bad .p { color: var(--err); font-weight: 600; }
+  .l1 .t { font-weight: 600; }
+  .muted { color: var(--muted); font-size: 13px; }
+  code { background: var(--accent-weak); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gắn Bookmark (mục lục) vào PDF</h1>
+  <p class="sub">Tải PDF và file bookmark JSON lên, trang sẽ tạo file PDF mới có mục lục bên thanh bookmark. Mọi xử lý diễn ra ngay trong trình duyệt, file không được gửi đi đâu.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>1. File PDF</h2>
+      <div class="drop" id="pdfDrop">
+        <strong id="pdfName">Bấm hoặc kéo thả file PDF vào đây</strong>
+        <span class="hint" id="pdfInfo">.pdf</span>
+      </div>
+      <input type="file" id="pdfInput" accept="application/pdf,.pdf">
+    </div>
+    <div class="card">
+      <h2>2. File bookmark JSON</h2>
+      <div class="drop" id="jsonDrop">
+        <strong id="jsonName">Bấm hoặc kéo thả file JSON vào đây</strong>
+        <span class="hint">hoặc dán / sửa trực tiếp ở ô bên dưới</span>
+      </div>
+      <input type="file" id="jsonInput" accept="application/json,.json">
+      <div class="actions" style="margin-top:10px">
+        <button class="secondary" id="loadSample" type="button">Dùng file mẫu</button>
+        <a class="btn secondary" href="bookmarks_mau.json" download>Tải file mẫu</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. Nội dung bookmark &amp; tuỳ chọn</h2>
+    <textarea id="jsonText" spellcheck="false" placeholder='{"title": "...", "offset": 0, "bookmarks": [{"title": "Chương 1", "page": 1, "level": 1}]}'></textarea>
+    <label class="row">Tiêu đề tài liệu:
+      <input type="text" id="docTitle" placeholder="(lấy từ trường title trong JSON)">
+    </label>
+    <label class="row">Độ lệch trang (offset):
+      <input type="number" id="offset" value="0" step="1">
+      <span class="muted">Trang thực trong PDF = <code>page</code> + offset. Ví dụ sách có 6 trang bìa/lời nói đầu chưa đánh số → offset = 6.</span>
+    </label>
+    <label class="row"><input type="checkbox" id="expand"> Mở rộng sẵn tất cả các mục con</label>
+    <label class="row"><input type="checkbox" id="showPanel" checked> Tự mở thanh bookmark khi mở PDF</label>
+  </div>
+
+  <div class="card">
+    <h2>4. Xem trước <span class="muted" id="count"></span></h2>
+    <div class="tree" id="tree"><span class="muted">Chưa có bookmark.</span></div>
+  </div>
+
+  <div class="card">
+    <div class="actions">
+      <button id="build" type="button" disabled>Tạo PDF có bookmark</button>
+      <a class="btn secondary" id="download" style="display:none">Tải PDF mới</a>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <p class="muted">Định dạng JSON: <code>{"title", "offset", "bookmarks": [{"title", "page", "level"}]}</code> — <code>level</code> 1 là chương, 2 là mục, 3 là tiểu mục…; các mục phải xếp theo đúng thứ tự xuất hiện.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+const { PDFDocument, PDFName, PDFHexString, PDFNumber, PDFNull } = PDFLib;
+const $ = (id) => document.getElementById(id);
+
+const state = { pdfBytes: null, pdfFile: null, pageCount: 0, data: null };
+
+// ---------- file inputs ----------
+function setupDrop(dropEl, inputEl, onFile) {
+  dropEl.addEventListener('click', () => inputEl.click());
+  inputEl.addEventListener('change', () => inputEl.files[0] && onFile(inputEl.files[0]));
+  dropEl.addEventListener('dragover', (e) => { e.preventDefault(); dropEl.classList.add('over'); });
+  dropEl.addEventListener('dragleave', () => dropEl.classList.remove('over'));
+  dropEl.addEventListener('drop', (e) => {
+    e.preventDefault(); dropEl.classList.remove('over');
+    const f = e.dataTransfer.files[0]; if (f) onFile(f);
+  });
+}
+
+setupDrop($('pdfDrop'), $('pdfInput'), async (file) => {
+  $('pdfName').textContent = file.name;
+  $('pdfInfo').textContent = 'Đang đọc…';
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    state.pdfBytes = bytes; state.pdfFile = file; state.pageCount = doc.getPageCount();
+    $('pdfInfo').textContent = `${state.pageCount} trang · ${(file.size / 1048576).toFixed(1)} MB`
+      + (doc.isEncrypted ? ' · ⚠ PDF có mã hoá, kết quả có thể lỗi' : '');
+    setMsg('');
+  } catch (err) {
+    state.pdfBytes = null; state.pageCount = 0;
+    $('pdfInfo').textContent = 'Không đọc được file PDF';
+    setMsg('Lỗi đọc PDF: ' + err.message, 'err');
+  }
+  refresh();
+});
+
+setupDrop($('jsonDrop'), $('jsonInput'), async (file) => {
+  $('jsonName').textContent = file.name;
+  loadJsonText(await file.text(), true);
+});
+
+$('loadSample').addEventListener('click', async () => {
+  try {
+    const res = await fetch('bookmarks_mau.json');
+    if (!res.ok) throw new Error(res.status);
+    $('jsonName').textContent = 'bookmarks_mau.json';
+    loadJsonText(await res.text(), true);
+  } catch (err) {
+    setMsg('Không tải được file mẫu (' + err.message + '). Nếu mở trực tiếp từ máy, hãy kéo thả file JSON vào.', 'err');
+  }
+});
+
+$('jsonText').addEventListener('input', () => loadJsonText($('jsonText').value, false));
+['offset', 'expand'].forEach((id) => $(id).addEventListener('input', refresh));
+
+function loadJsonText(text, fromFile) {
+  if (fromFile) $('jsonText').value = text;
+  try {
+    const data = JSON.parse(text);
+    const list = Array.isArray(data) ? data : data.bookmarks;
+    if (!Array.isArray(list)) throw new Error('thiếu mảng "bookmarks"');
+    state.data = { title: data.title || '', offset: Number(data.offset) || 0, bookmarks: list };
+    if (fromFile) {
+      $('offset').value = state.data.offset;
+      $('docTitle').value = state.data.title;
+    }
+    setMsg('');
+  } catch (err) {
+    state.data = null;
+    if (text.trim()) setMsg('JSON không hợp lệ: ' + err.message, 'err');
+  }
+  refresh();
+}
+
+// ---------- tree ----------
+function normalize(list) {
+  return list
+    .map((b, i) => ({
+      title: String(b.title ?? b.name ?? '').trim() || `Mục ${i + 1}`,
+      page: parseInt(b.page, 10),
+      level: Math.max(1, parseInt(b.level, 10) || 1),
+    }))
+    .filter((b) => Number.isFinite(b.page));
+}
+
+function buildTree(items) {
+  const root = { children: [] };
+  const stack = [{ level: 0, node: root }];
+  for (const it of items) {
+    while (stack.length > 1 && stack[stack.length - 1].level >= it.level) stack.pop();
+    const node = { title: it.title, page: it.page, children: [] };
+    stack[stack.length - 1].node.children.push(node);
+    stack.push({ level: it.level, node });
+  }
+  return root.children;
+}
+
+function refresh() {
+  const tree = $('tree');
+  const items = state.data ? normalize(state.data.bookmarks) : [];
+  const offset = parseInt($('offset').value, 10) || 0;
+  let bad = 0;
+  if (!items.length) {
+    tree.innerHTML = '<span class="muted">Chưa có bookmark.</span>';
+    $('count').textContent = '';
+  } else {
+    tree.innerHTML = '';
+    for (const it of items) {
+      const real = it.page + offset;
+      const out = state.pageCount && (real < 1 || real > state.pageCount);
+      if (out) bad++;
+      const row = document.createElement('div');
+      row.className = `it l${it.level}` + (out ? ' bad' : '');
+      row.style.paddingLeft = (it.level - 1) * 18 + 'px';
+      const t = document.createElement('span'); t.className = 't'; t.textContent = it.title;
+      const p = document.createElement('span'); p.className = 'p';
+      p.textContent = offset ? `tr. ${it.page} → ${real}` : `tr. ${real}`;
+      row.append(t, p); tree.append(row);
+    }
+    $('count').textContent = `(${items.length} mục` + (bad ? `, ${bad} mục ngoài phạm vi ${state.pageCount} trang` : '') + ')';
+  }
+  $('build').disabled = !(state.pdfBytes && items.length);
+  $('download').style.display = 'none';
+}
+
+// ---------- outline writer ----------
+function addOutline(pdfDoc, tree, offset, expand) {
+  const ctx = pdfDoc.context;
+  const pages = pdfDoc.getPages();
+  const clampIdx = (p) => Math.min(Math.max(p + offset - 1, 0), pages.length - 1);
+  const visible = (node) => expand ? node.children.reduce((s, c) => s + 1 + visible(c), 0) : 0;
+
+  function writeLevel(nodes, parentRef) {
+    const refs = nodes.map(() => ctx.nextRef());
+    nodes.forEach((n, i) => {
+      const d = ctx.obj({});
+      d.set(PDFName.of('Title'), PDFHexString.fromText(n.title));
+      d.set(PDFName.of('Parent'), parentRef);
+      d.set(PDFName.of('Dest'), ctx.obj([pages[clampIdx(n.page)].ref, PDFName.of('XYZ'), PDFNull, PDFNull, PDFNull]));
+      if (i > 0) d.set(PDFName.of('Prev'), refs[i - 1]);
+      if (i < nodes.length - 1) d.set(PDFName.of('Next'), refs[i + 1]);
+      if (n.children.length) {
+        const kids = writeLevel(n.children, refs[i]);
+        d.set(PDFName.of('First'), kids[0]);
+        d.set(PDFName.of('Last'), kids[kids.length - 1]);
+        d.set(PDFName.of('Count'), PDFNumber.of(expand ? visible(n) : -n.children.length));
+      }
+      ctx.assign(refs[i], d);
+    });
+    return refs;
+  }
+
+  const rootRef = ctx.nextRef();
+  const top = writeLevel(tree, rootRef);
+  const root = ctx.obj({ Type: 'Outlines' });
+  root.set(PDFName.of('First'), top[0]);
+  root.set(PDFName.of('Last'), top[top.length - 1]);
+  root.set(PDFName.of('Count'), PDFNumber.of(tree.reduce((s, n) => s + 1 + visible(n), 0)));
+  ctx.assign(rootRef, root);
+  pdfDoc.catalog.set(PDFName.of('Outlines'), rootRef);
+}
+
+$('build').addEventListener('click', async () => {
+  const btn = $('build');
+  btn.disabled = true; btn.textContent = 'Đang xử lý…';
+  try {
+    const pdfDoc = await PDFDocument.load(state.pdfBytes, { ignoreEncryption: true });
+    const offset = parseInt($('offset').value, 10) || 0;
+    const tree = buildTree(normalize(state.data.bookmarks));
+    addOutline(pdfDoc, tree, offset, $('expand').checked);
+    if ($('showPanel').checked) pdfDoc.catalog.set(PDFName.of('PageMode'), PDFName.of('UseOutlines'));
+    const title = $('docTitle').value.trim();
+    if (title) pdfDoc.setTitle(title, { showInWindowTitleBar: true });
+
+    const out = await pdfDoc.save();
+    const url = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
+    const a = $('download');
+    const base = state.pdfFile.name.replace(/\.pdf$/i, '');
+    a.href = url; a.download = `${base}_bookmark.pdf`; a.style.display = 'inline-block';
+    a.click();
+    setMsg(`Đã tạo xong ${a.download} (${(out.length / 1048576).toFixed(1)} MB). Nếu trình duyệt không tự tải, bấm "Tải PDF mới".`, 'ok');
+  } catch (err) {
+    console.error(err);
+    setMsg('Lỗi khi tạo PDF: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Tạo PDF có bookmark';
+  }
+});
+
+function setMsg(text, cls = '') { const m = $('msg'); m.textContent = text; m.className = 'msg ' + cls; }
+</script>
+</body>
+</html>
